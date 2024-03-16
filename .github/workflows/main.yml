@@ -6,7 +6,7 @@ concurrency: streamdownloader
 # Controls when the workflow will run
 on:
   schedule:
-    - cron: '*/55 * * * *'  # every 30 minutes
+    - cron: '*/15 * * * *'  # every 30 minutes
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -22,6 +22,15 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+
+      - name: Install rclone
+        run: |
+         curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure Rclone
+        run: |
+         echo '${{ secrets.RCLONE_CONFIG }}' > rclone.conf
+      
       - name: Cache For Downloaded Livestream
         id: restore-cache
         uses: actions/cache@v3.0.8
@@ -38,17 +47,11 @@ jobs:
       - name: Upload Cached VOD
         id: upload
         if: steps.restore-cache.outputs.cache-hit == 'true' && (hashFiles('*.mp4') != '' || hashFiles('*.mkv') != '')
-        env:
-          accesskey: ${{secrets.ACCESS_KEY}}
-          secret: ${{secrets.SECRET}}
-          bucketname: NON2.yt
+        
         run: |
           file=$(find -type f -name "*.mp4" -or -type f -name "*.mkv");
           fileName=${file:2}
-          fileNameEncoded=$(python -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))"  "$fileName")
-          echo $fileNameEncoded
-          curl -g --location --header 'x-amz-auto-make-bucket:1' --header "authorization: LOW $accesskey:$secret" --upload-file "$file" http://s3.us.archive.org/"$bucketname"/"$fileNameEncoded"
-
+          rclone copy "$file" ob:📥youtube-archive/WindahBasudara --config rclone.conf 
       - name: Clear cache
         if: steps.upload.outcome == 'success'
         uses: actions/github-script@v6
@@ -78,7 +81,7 @@ jobs:
 
       - name: Download livestream
         env:
-          channelid: Rizadimmalano
+          channelid: WindahBasudara
         if: steps.predownload.outcome == 'success'
         continue-on-error: true
         run: yt-dlp https://www.youtube.com/@"$channelid"/live --live-from-start
